@@ -3,39 +3,111 @@
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use App\Controller\PostCountController;
+use App\Controller\PostPublishController;
+use ApiPlatform\Core\Annotation\ApiFilter;
+use ApiPlatform\Core\Annotation\ApiProperty;
 use ApiPlatform\Core\Annotation\ApiResource;
-use Symfony\Component\Serializer\Annotation\Groups;
-use App\Repository\PostRepository; // api platform ou voir et configurer dans config\packages\api_platform.yaml
-use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\Valid;
+use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Validator\Constraints\Length;
+use ApiPlatform\Core\Bridge\Doctrine\Orm\Filter\SearchFilter;
+use App\Repository\PostRepository; // api platform ou voir et configurer dans config\packages\api_platform.yaml
 
 #[ORM\Entity(repositoryClass:PostRepository::class)]
 #[ApiResource(
     // attributes: [
     //     'validation_groups' => [...saisir les groupes]
     // ],
-    normalizationContext:['groups' => ['read:collection']],
+    normalizationContext:['groups' => ['read:collection'],
+    'openapi_definition_name' => 'collection', // definir un  nom pour la definition de l'api
+    ],
     // seul les champs indiqué dans ['put:Post'] pourront etre modifié
     denormalizationContext:['groups' => ['write:Post']],
+    //pagination 
+    paginationItemsPerPage: 2,
+    //nombre maximum d'item par page lors de la pagination
+    paginationMaximumItemsPerPage:2,
+    paginationClientItemsPerPage: true,
     
     // dans les operations de collections on pourra seulement récupérer des informations
     collectionOperations: [
         'get',
-        'post' //=> [
-            //Contraintes de validations lors de la creation
-         //'validation_groups' => ['create:Post'] // 1ere facon de faire 
-         //  'validation_groups' => [Post::class, 'validationGroups'] // function static que l'on créer plus bas 2eme facon de faire
-        //]
+        'count' => [
+            'method' => 'GET',
+            'path' => 'posts/count',
+            'controller' => PostCountController::class,
+            'read' => false,
+            'pagination_enabled' => false, // supprimer la pagination
+            'filters' => [], // retire les filtres
+            'openapi_context' => [
+                'summary' => 'Récupére le nombre total d\'articles',
+                'parameters' => [
+                    [
+                        'in' => 'query',
+                        'name' => 'online',
+                        'schema' => [
+                            'type' => 'integer',
+                            'maximum' => 1,
+                            'minimum' => 0,
+                        ],
+                        'description' => 'Filtre les articles en ligne',
+                    ]
+                ],
+                'responses' => [
+                    '200' => [
+                        'description' => 'Ok',
+                        'content' => [
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'integer',
+                                    'example' => 3,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        ]
+
     ],
+    //     'post' //=> [
+    //         //Contraintes de validations lors de la creation
+    //      //'validation_groups' => ['create:Post'] // 1ere facon de faire 
+    //      //  'validation_groups' => [Post::class, 'validationGroups'] // function static que l'on créer plus bas 2eme facon de faire
+    //     //]
+    // ],
     //itemOperations sur un seul élément au contraire de collectionOperations
     itemOperations:[
         'put',
         'delete',
         'get' => [
-            'normalization_context' => ['groups' => ['read:collection', 'read:item', 'read:Post']],
+            'normalization_context' => [
+                'groups' => ['read:collection', 'read:item', 'read:Post'],
+                'openapi_definition_name' => 'Detail', // definir un  nom pour la definition de l'api
+            ],
+        ],
+        'publish' => [
+            'method' => 'POST',
+            'path' => '/posts/{id}/publish',
+            'controller' => PostPublishController::class,
+            'openapi_context' => [
+                'summary' => 'Permet de publier un article',
+                'requestBody' => [
+                    'content' => [
+                        'application/json' => [
+                            'schema' => []
+                        ]
+                    ]
+                ]
+            ]
+            //'write' => false, // empeche l'ecriture dans la base de données
         ],
     ]
-)]
+),
+
+ApiFilter(SearchFilter::class, properties: ['id' => 'exact', 'title' => 'partial' ])
+]
 
 class Post
 {
@@ -74,6 +146,13 @@ private $updatedAt;
 
 ]
 private $category;
+
+#[ORM\Column(type: 'boolean', options: ['default' => "0"])]
+#[
+    Groups(['read:collection']),
+    ApiProperty(openapiContext: ['type' => 'boolean', 'description' => 'En ligne ou pas ?'])
+]
+private $online = false;
 
 
 public static function validationGroups(self $post){
@@ -162,6 +241,18 @@ function getCategory(): ?Category
 function setCategory(?Category $category): self
     {
     $this->category = $category;
+
+    return $this;
+}
+
+public function isOnline(): ?bool
+{
+    return $this->online;
+}
+
+public function setOnline(bool $online): self
+{
+    $this->online = $online;
 
     return $this;
 }
