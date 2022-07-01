@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Core\Action\NotFoundAction;
 use Doctrine\ORM\Mapping as ORM;
 use ApiPlatform\Core\Annotation\ApiResource;
 use App\Repository\CategoryRepository;
@@ -11,10 +12,24 @@ use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints\Length;
 
 #[ORM\Entity(repositoryClass:CategoryRepository::class)]
-#[ApiResource]
+#[ApiResource(
+    collectionOperations: ['get', 'post'],
+    itemOperations: [
+        'put', 
+        'patch', 
+        'delete',
+        //exemple pour desactiver un point d'entrée dans l'api 
+        'get' =>[
+            'controller' => NotFoundAction::class,
+            'openapi_context' => ['summary' => 'hidden'],
+            'read' => false, // desactiver la lecture
+            'output' => false, // desactiver le resultat de la requete
+
+    ]],
+)]
 class Category
 {
-    #[ORM\Id]
+#[ORM\Id]
 #[ORM\GeneratedValue]
 #[ORM\Column(type:'integer')]
 #[Groups(['read:Post'])] // #[Groups(['read:Post'])] parametre utilisé dans Post.php pour l'affichage des données lors d'une relation
